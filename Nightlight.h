@@ -51,9 +51,75 @@ class NightlightState {
     virtual void start(Nightlight *me);
     virtual void onTimeout(Nightlight *me);
     virtual void receiveMessage(Nightlight *me, uint64_t address, byte type);
-    virtual void receiveMessage(Nightlight *me, char *line);
+    virtual void receiveSerial(Nightlight *me, char *line);
 };
 
+/**
+ * Represents a node that has a friend of some kind, loaded into _friendAddress.
+ * Used, for example, to represent state with a controller.
+ */
+class NightlightStateWithFriend : public NightlightState {
+  public:
+    void setFriend(uint64_t friendAddress) {
+      _friendAddress = friendAddress;
+    }
+
+  protected:
+    uint64_t _friendAddress; 
+};
+
+/**
+ * Represents an output/display device that it just "on" or "off".
+ * Can be strobed, etc, by the caller
+ */
+class DigitalOutput {
+    public:
+        DigitalOutput(byte pin);
+        DigitalOutput(byte pin, bool inverted);
+
+        void setup();
+        void on();
+        void off();
+
+    protected:
+        byte _pin;
+        bool _inverted;
+};
+
+/**
+ * An open node, waiting for a controller
+ */
+class OpenNode : public NightlightState { 
+  public:
+    void start(Nightlight *me);
+    void onTimeout(Nightlight *me);
+    void receiveMessage(Nightlight *me, uint64_t sender, byte type);
+//    void receiveSerial(Nightlight *me, char *line);
+
+    void setState_controlled(NightlightStateWithFriend *dest);
+
+  private:
+    NightlightStateWithFriend *_state_controlled;
+
+};  
+
+/**
+ * An open node, waiting for a controller
+ */
+class ControlledNode : public NightlightStateWithFriend { 
+  public:
+    void start(Nightlight *me);
+    void onTimeout(Nightlight *me);
+    void receiveMessage(Nightlight *me, uint64_t sender, byte type);
+    
+    void setOutput(DigitalOutput *output);
+    void setState_lostControl(NightlightState *dest);
+    
+  private:
+    uint64_t _controller;
+    NightlightState *_state_lostControl;
+    DigitalOutput *_output;
+};
 
 /////////
 

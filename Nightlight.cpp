@@ -115,6 +115,84 @@ void NightlightState::receiveSerial(Nightlight *me, char *line) {
 
 ///////////////////////////////////////////////////////
 
+DigitalOutput::DigitalOutput(byte pin) {
+  _pin = pin;
+  _inverted = false;
+}
+DigitalOutput::DigitalOutput(byte pin, bool inverted) {
+  _pin = pin;
+  _inverted = inverted;
+}
+
+void DigitalOutput::setup() {
+  pinMode(_pin, OUTPUT);
+}
+void DigitalOutput::on() {
+  digitalWrite(_pin, !_inverted);
+}
+void DigitalOutput::off() {
+  digitalWrite(_pin, _inverted);
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+
+
+void OpenNode::setState_controlled(NightlightStateWithFriend *dest) {
+  _state_controlled = dest;
+}
+
+void OpenNode::start(Nightlight *me) {
+  me->setTimeout(5000); 
+}
+
+void OpenNode::onTimeout(Nightlight *me) {
+  me->broadcastMessage(MSG_HELLO);
+  start(me);
+}
+  
+void OpenNode::receiveMessage(Nightlight *me, uint64_t sender, byte type)
+{
+  if(type == MSG_CONTROL_REQUEST) {
+    _state_controlled->setFriend(sender);
+    me->setState(_state_controlled);
+  }
+}
+/*
+void OpenNode::receiveSerial(Nightlight *me, char *line)
+{
+  if(line[0] == 'C') {
+    me->setState(_state_controller);
+  } 
+}
+*/
+
+////////////////////////////////////////////////////////////////////////////////////
+
+void ControlledNode::setOutput(DigitalOutput *output) {
+  _output = output;
+}
+void ControlledNode::setState_lostControl(NightlightState *dest) {
+  _state_lostControl = dest;
+}
+void ControlledNode::start(Nightlight *me) {
+  me->sendMessage(_friendAddress, MSG_CONTROL_START);
+}
+void ControlledNode::onTimeout(Nightlight *me) {
+  _output->off();
+  me->sendMessage(_friendAddress, MSG_COMMAND_END);
+}
+
+void ControlledNode::receiveMessage(Nightlight *me, uint64_t sender, byte type)
+{
+  if(type == MSG_COMMAND_SEND) {
+    if(sender == _friendAddress) {
+      me->sendMessage(_friendAddress, MSG_COMMAND_START);
+      _output->on();
+      me->setTimeout(1000);
+    }
+  }    
+}
+
 void output(const char* asd) {
     /*if (DEBUG)*/ Serial.write(asd);    
 }
