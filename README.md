@@ -3,9 +3,22 @@ Nightlight
 
 Nightlight is a protocol and base Arduino library for making a collection of peer-to-peer audiovisual toys.
 
-See examples/controllable_node for a simple example.
+See [controllable_node.pde](examples/controllable_node/controllable_node.pde) for a simple example.
 
 This is very much a work in progress and you should expect some heavy refactoring.
+
+Installation
+------------
+
+Like other Arduino libraries, this library should be checked out into the `libraries/`, so that, for example, the header files appears as `libraries/nightlight/Nightlight.h`. On OS X, the default location for this folder is `~/Documents/Arduino/libraries`.
+
+In addition to this library, the [RF24](https://github.com/maniacbug/RF24) libary by maniacbug is also required.
+
+Assuming you're using OS X, with the default Arduino sketch folder, and you have Git installed, you can download and install the libraries by running these commands from your shell: 
+
+    cd ~/Documents/Arduino/libraries
+    git clone https://github.com/maniacbug/RF24.git  
+    git clone https://github.com/camp8bit/nightlight.git
 
 Concepts
 --------
