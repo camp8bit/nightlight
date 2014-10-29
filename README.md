@@ -1,6 +1,8 @@
 Nightlight
 ==========
 
+[![Build Status](https://travis-ci.org/camp8bit/nightlight.svg)](https://travis-ci.org/camp8bit/nightlight)
+
 Nightlight is a protocol and base Arduino library for making a collection of peer-to-peer audiovisual toys.
 
 See [controllable_node.pde](examples/controllable_node/controllable_node.pde) for a simple example.
