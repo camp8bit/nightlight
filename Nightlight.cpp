@@ -188,12 +188,12 @@ void OpenNode::setState_controlled(NightlightStateWithFriend *dest) {
 }
 
 void OpenNode::start(Nightlight *me) {
-  me->setTimeout(5000); 
+  onTimeout(me);
 }
 
 void OpenNode::onTimeout(Nightlight *me) {
   me->sendMessage(0, MSG_HELLO, (byte *)"OpenNode", 8);
-  start(me);
+  me->setTimeout(5000);
 }
   
 void OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
