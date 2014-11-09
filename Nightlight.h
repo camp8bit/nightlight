@@ -149,6 +149,19 @@ class ControlledNode : public NightlightStateWithFriend {
     DigitalOutput *_output;
 };
 
+/**
+ * An open node, waiting for a controller
+ */
+class ControllerState : public NightlightState { 
+  public:
+    void start(Nightlight *me);
+    void receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
+    void receiveSerial(Nightlight *me, char *line);
+
+  private:
+    byte _controlling;
+};
+
 /////////
 
 void output(const char* asd);

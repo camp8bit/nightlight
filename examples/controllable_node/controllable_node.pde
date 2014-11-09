@@ -25,21 +25,21 @@ Nightlight nightlight(0x26B8259100LL);
 // States for the nightlight state machine
 OpenNode openNode;
 ControlledNode controlledNode;
+ControllerState controllerState;
 
 // Output device - an LED on pin #2
 DigitalOutput led(2);
 
 void setup(void)
 {
-//  nightlight.enableSerial();
-
+  
   // Wire together the states (dependency injection in Arduino, oh my)
   openNode.setState_controlled(&controlledNode);
   controlledNode.setState_lostControl(&openNode);
 
   // Swapping between states triggered from commands on the serial input
-  // openNode.onSerialCommandGoto("controller", &controllerState);
-  // controllerState.onSerialCommandGoto("node", &openNode);
+  openNode.onSerialCommandGoto("controller", &controllerState);
+  controllerState.onSerialCommandGoto("node", &openNode);
   
   // Connect the LED to the output
   led.setup();
@@ -49,6 +49,7 @@ void setup(void)
   nightlight.setState(&openNode);
 
   nightlight.setup();
+  nightlight.enableSerial();
 }
 
 void loop()

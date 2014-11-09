@@ -239,6 +239,49 @@ void ControlledNode::receiveMessage(Nightlight *me, byte sender, byte type, byte
   }    
 }
 
+////////////////////////////////////////////////////////////////////////////////////
+
+void ControllerState::start(Nightlight *me) {
+  _controlling = 0;
+}
+
+void ControllerState::receiveSerial(Nightlight *me, char *line)
+{
+  if(line[0] == 'B') {
+    if(_controlling > 0) {
+      Serial.print("Sending a beat to ");
+      Serial.println(_controlling);
+    } else {
+      Serial.print("No nodes currently under control");
+    }
+  } 
+}
+
+void ControllerState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
+{
+  if(type == MSG_HELLO) {
+    Serial.print("Received MSG_HELLO from ");
+    Serial.println(sender);
+    me->sendMessage(sender, MSG_CONTROL_REQUEST, 0, 0);
+  }    
+
+  if(type == MSG_CONTROL_START) {
+    Serial.print("Received MSG_CONTROL_START from ");
+    Serial.println(sender);
+    _controlling = sender;
+  }
+
+  if(type == MSG_COMMAND_START) {
+    Serial.print("Received MSG_COMMAND_START from ");
+    Serial.println(sender);
+  }
+  if(type == MSG_COMMAND_END) {
+    Serial.print("Received MSG_COMMAND_END from ");
+    Serial.println(sender);
+  }
+}
+
+
 void output(const char* asd) {
     /*if (DEBUG)*/ Serial.write(asd);    
 }
