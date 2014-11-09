@@ -1,4 +1,7 @@
-#include "RF24.h"
+typedef unsigned char byte;
+typedef unsigned long long uint64_t;
+
+#include <RF24.h>
 
 #ifndef Nightlight_h
 #define Nightlight_h
@@ -29,18 +32,19 @@ class Nightlight {
     Nightlight(uint64_t broadcast);
     void setup();
     void loop();
-    void sendMessage(uint64_t address, byte type);
-    void broadcastMessage(byte type);
+    void sendMessage(byte address, byte type, byte *data, byte dataLength);
     void setState(NightlightState *state);
     void setTimeout(unsigned long millis);
+    void enableSerial();
     
   private:
-    uint64_t _broadcast;
-    uint64_t _myAddress;
+    uint64_t _broadcast; // The broadcast address, last 2 bytes must be 00
+    byte _myAddressOffset; // The offset, 0-255, of the personal address
     RF24 _radio;
     NightlightState *_state;
     unsigned long _timeout;
 
+    void _handleRadioInput();
 };
 
 /**
@@ -50,7 +54,7 @@ class NightlightState {
   public:
     virtual void start(Nightlight *me);
     virtual void onTimeout(Nightlight *me);
-    virtual void receiveMessage(Nightlight *me, uint64_t address, byte type);
+    virtual void receiveMessage(Nightlight *me, byte address, byte type, byte *data, byte dataLength);
     virtual void receiveSerial(Nightlight *me, char *line);
 };
 
@@ -93,7 +97,7 @@ class OpenNode : public NightlightState {
   public:
     void start(Nightlight *me);
     void onTimeout(Nightlight *me);
-    void receiveMessage(Nightlight *me, uint64_t sender, byte type);
+    void receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
 //    void receiveSerial(Nightlight *me, char *line);
 
     void setState_controlled(NightlightStateWithFriend *dest);
@@ -110,7 +114,7 @@ class ControlledNode : public NightlightStateWithFriend {
   public:
     void start(Nightlight *me);
     void onTimeout(Nightlight *me);
-    void receiveMessage(Nightlight *me, uint64_t sender, byte type);
+    void receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
     
     void setOutput(DigitalOutput *output);
     void setState_lostControl(NightlightState *dest);
@@ -127,5 +131,5 @@ void output(const char* asd);
 void output(long unsigned int asd);
 void outputln(const char* asd);
 void outputln(long unsigned int asd);
-
+void outputBytes(byte *data, byte len);
 #endif

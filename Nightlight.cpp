@@ -1,26 +1,30 @@
-#include "RF24.h"
+#include <RF24.h>
 #include "Nightlight.h"
 
 Nightlight::Nightlight(uint64_t broadcast) : _radio(9,10)
 {
   _broadcast = broadcast;
-  _myAddress = broadcast + random(256);
 }
 
 void Nightlight::setup()
 {
   
+  randomSeed(analogRead(3));
+  _myAddressOffset = random(256);
+  Serial.print("My address is ");
+  Serial.println(_myAddressOffset);
+
   _radio.begin();
 
-  // optionally, increase the delay between retries & # of retries
+  // optionally, reduce the payload size. seems to improve reliability
+  _radio.enableDynamicPayloads();
+  _radio.setPayloadSize(16);
   _radio.setRetries(15,15);
 
-  // optionally, reduce the payload size. seems to improve reliability
-  _radio.setPayloadSize(8);
-
   // Listen on the broadcast port
-  _radio.openReadingPipe(1, _broadcast);
-  _radio.openReadingPipe(2, _myAddress);
+  _radio.openReadingPipe(0, _broadcast);
+  _radio.openReadingPipe(1, _broadcast + (uint64_t)_myAddressOffset);
+  _radio.setAutoAck(0, false);
 
   _radio.startListening();
 
@@ -31,22 +35,22 @@ void Nightlight::setup()
   //  radio.printDetails();  
 }
 
+void Nightlight::enableSerial() {
+  Serial.begin(57600, SERIAL_8N1);
+  outputln("\nNightlight - serial communication activated");
+  output("Listening on ");
+  Serial.print((long unsigned int)_broadcast);
+  output("-");
+  Serial.println(_myAddressOffset);
+}
+
+
 void Nightlight::loop()
 {
-  bool done = false;
 
   // Check for radio messages
   if ( _radio.available() ) {
-    // Dump the payloads until we've gotten everything
-    byte messageType;
-    while (!done) {
-      // Fetch the payload, and see if this was the last one.
-      done = _radio.read( &messageType, sizeof(byte) );
-      _state->receiveMessage(this, 0, messageType);
-
-      output("Got payload");
-      outputln(messageType);
-    }
+    _handleRadioInput();
   }
 
   // Check for serial messages
@@ -65,30 +69,53 @@ void Nightlight::loop()
   }
 }
 
-/**
- * Send a message to a specific address
- */
-void Nightlight::sendMessage(uint64_t address, byte type)
-{
-  outputln("Sending message");
+void Nightlight::_handleRadioInput() {
+  bool done = false;
+  byte message[32];
 
-  _radio.stopListening();
-  _radio.openWritingPipe(address);
+  // Fetch the payload, and see if this was the last one.
+  byte messageSize = _radio.getDynamicPayloadSize();
 
-  if(!_radio.write( &type, sizeof(byte) )) {
-    // error 
-  }
+  done = _radio.read(message, 32);
+  _state->receiveMessage(this, message[1], message[0], message+2, messageSize-2);
 
-  _radio.startListening();
 }
 
+
+
 /**
- * Broadcast a message - send it on the broadcast address
+ * Send a message to an address
+ * @param address 0 for broadcast, 1-255 for a specific recipient
  */
-void Nightlight::broadcastMessage(byte type)
+void Nightlight::sendMessage(byte address, byte type, byte *data, byte dataLength)
 {
-  outputln("Broadcasting message");
-  sendMessage(_broadcast, type);
+
+  byte packet[32];
+
+  output("Sending message to ");
+  Serial.print(address);
+  output(". My address: ");
+  Serial.print(_myAddressOffset);
+  output("Type: ");
+  Serial.print(type);
+  output(", data: ");
+  outputBytes(data, dataLength);
+  Serial.write('\n');
+
+  _radio.stopListening();
+  _radio.openWritingPipe(_broadcast + address);
+
+  // Build packet
+  packet[0] = type;
+  packet[1] = _myAddressOffset;
+  for(int i=0;i<dataLength;i++) {
+    packet[i+2] = data[i];
+  }
+
+  // Non-blocking, no error checking
+  _radio.write(packet, dataLength + 2 );
+
+  _radio.startListening();
 }
 
 void Nightlight::setTimeout(unsigned long timeout)
@@ -108,7 +135,7 @@ void NightlightState::start(Nightlight *me) {
 }
 void NightlightState::onTimeout(Nightlight *me) {
 }
-void NightlightState::receiveMessage(Nightlight *me, uint64_t address, byte type) {
+void NightlightState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength) {
 }
 void NightlightState::receiveSerial(Nightlight *me, char *line) {
 }
@@ -146,16 +173,24 @@ void OpenNode::start(Nightlight *me) {
 }
 
 void OpenNode::onTimeout(Nightlight *me) {
-  me->broadcastMessage(MSG_HELLO);
+  me->sendMessage(0, MSG_HELLO, (byte *)"OpenNode", 8);
   start(me);
 }
   
-void OpenNode::receiveMessage(Nightlight *me, uint64_t sender, byte type)
+void OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_CONTROL_REQUEST) {
     _state_controlled->setFriend(sender);
     me->setState(_state_controlled);
   }
+
+  output("message received from #");
+  Serial.print(sender);
+  output(": type ");
+  Serial.print(type);
+  output("; data: ");
+  outputBytes(data, dataLength);
+  Serial.write('\n');
 }
 /*
 void OpenNode::receiveSerial(Nightlight *me, char *line)
@@ -175,18 +210,18 @@ void ControlledNode::setState_lostControl(NightlightState *dest) {
   _state_lostControl = dest;
 }
 void ControlledNode::start(Nightlight *me) {
-  me->sendMessage(_friendAddress, MSG_CONTROL_START);
+  me->sendMessage(_friendAddress, MSG_CONTROL_START, 0, 0);
 }
 void ControlledNode::onTimeout(Nightlight *me) {
   _output->off();
-  me->sendMessage(_friendAddress, MSG_COMMAND_END);
+  me->sendMessage(_friendAddress, MSG_COMMAND_END, 0, 0);
 }
 
-void ControlledNode::receiveMessage(Nightlight *me, uint64_t sender, byte type)
+void ControlledNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_COMMAND_SEND) {
     if(sender == _friendAddress) {
-      me->sendMessage(_friendAddress, MSG_COMMAND_START);
+      me->sendMessage(_friendAddress, MSG_COMMAND_START, 0, 0);
       _output->on();
       me->setTimeout(1000);
     }
@@ -207,4 +242,18 @@ void outputln(const char* asd) {
 
 void outputln(long unsigned int asd) {
     /*if (DEBUG)*/ Serial.write(asd);
+}
+
+void outputBytes(byte *data, byte len) {
+  byte i;
+  for(i=0;i<len;i++) {
+    Serial.print(data[i]);
+    Serial.print(',');
+  }
+  Serial.print(" ('");
+  for(i=0;i<len;i++) {
+    Serial.write(data[i]);
+  }
+  Serial.print("')");
+
 }
