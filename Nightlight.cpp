@@ -137,7 +137,26 @@ void NightlightState::onTimeout(Nightlight *me) {
 }
 void NightlightState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength) {
 }
+
 void NightlightState::receiveSerial(Nightlight *me, char *line) {
+  // Look up a built-in command
+  NightlightState *dest = (NightlightState *)_serialCommands.get(line);
+  if((int)dest != 0) {
+    Serial.println("Switching state");
+    me->setState(dest);
+
+  } else {
+    Serial.print("Unknown command '");
+    Serial.print(line);
+    Serial.println("'");
+  }
+}
+
+/**
+ * Add a serial command that will switch to another state
+ */
+void NightlightState::onSerialCommandGoto(char *command, NightlightState *dest) {
+  _serialCommands.add(command, dest);
 }
 
 ///////////////////////////////////////////////////////
@@ -192,14 +211,6 @@ void OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data
   outputBytes(data, dataLength);
   Serial.write('\n');
 }
-/*
-void OpenNode::receiveSerial(Nightlight *me, char *line)
-{
-  if(line[0] == 'C') {
-    me->setState(_state_controller);
-  } 
-}
-*/
 
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -256,4 +267,40 @@ void outputBytes(byte *data, byte len) {
   }
   Serial.print("')");
 
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+
+Map::Map() {
+  _numItems = 0;
+}
+
+/**
+ * Add an item to the map
+ * Returns true if it could, false if it's full
+ */
+bool Map::add(char *key, void *value) {
+  if(_numItems < MAP_MAX_ITEMS) {
+    _keys[_numItems] = key;
+    _values[_numItems] = value;
+    _numItems++;
+    return true;
+  }
+  // Sorry, we're full
+  return false;
+}
+
+/**
+ * Return the item corresponding to this key
+ */
+void *Map::get(char *key) {
+  byte i;
+  for(i=0; i<_numItems; i++) {
+    if(strcmp(key, _keys[i]) == 0) {
+      return _values[i];
+    }
+  }
+
+  // No match
+  return (void *)0;
 }

@@ -26,6 +26,25 @@ const byte MSG_EVENT = 24;
 
 class Nightlight;
 class NightlightState;
+class Map;
+
+
+const byte MAP_MAX_ITEMS = 5;
+
+/**
+ * Represents a simple map with 5 elements; mapping keys to (void *) values
+ */
+class Map {
+  public:
+    Map();
+    bool add(char *key, void *value);
+    void *get(char *key);
+
+  private:
+    byte _numItems;
+    char *_keys[MAP_MAX_ITEMS];
+    void *_values[MAP_MAX_ITEMS];
+};
 
 class Nightlight {
   public:
@@ -56,7 +75,13 @@ class NightlightState {
     virtual void onTimeout(Nightlight *me);
     virtual void receiveMessage(Nightlight *me, byte address, byte type, byte *data, byte dataLength);
     virtual void receiveSerial(Nightlight *me, char *line);
+
+    void onSerialCommandGoto(char *command, NightlightState *dest);
+
+  private:
+    Map _serialCommands;
 };
+
 
 /**
  * Represents a node that has a friend of some kind, loaded into _friendAddress.
@@ -98,7 +123,6 @@ class OpenNode : public NightlightState {
     void start(Nightlight *me);
     void onTimeout(Nightlight *me);
     void receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
-//    void receiveSerial(Nightlight *me, char *line);
 
     void setState_controlled(NightlightStateWithFriend *dest);
 
