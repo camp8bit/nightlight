@@ -17,9 +17,12 @@ void Nightlight::setup()
   _radio.begin();
 
   // optionally, reduce the payload size. seems to improve reliability
-  _radio.enableDynamicPayloads();
   _radio.setPayloadSize(16);
+  _radio.enableDynamicPayloads();
   _radio.setRetries(15,15);
+
+  _radio.setDataRate(RF24_2MBPS);
+  _radio.setPALevel(RF24_PA_HIGH);
 
   // Listen on the broadcast port
   _radio.openReadingPipe(0, _broadcast);
