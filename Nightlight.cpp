@@ -128,6 +128,7 @@ void Nightlight::setTimeout(unsigned long timeout)
 
 void Nightlight::setState(NightlightState *state)
 {
+  _timeout = 0;
   _state = state;
   _state->start(this);
 }
@@ -196,7 +197,7 @@ void OpenNode::start(Nightlight *me) {
 
 void OpenNode::onTimeout(Nightlight *me) {
   me->sendMessage(0, MSG_HELLO, (byte *)"OpenNode", 8);
-  me->setTimeout(5000);
+  me->setTimeout(2000);
 }
   
 void OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
@@ -254,8 +255,11 @@ void ControllerState::receiveSerial(Nightlight *me, char *line)
     if(_controlling > 0) {
       Serial.print("Sending a beat to ");
       Serial.println(_controlling);
+
+      me->sendMessage(_controlling, MSG_COMMAND_SEND, 0, 0);
+      
     } else {
-      Serial.print("No nodes currently under control");
+      Serial.println("No nodes currently under control");
     }
   } 
 }
