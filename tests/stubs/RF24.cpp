@@ -33,6 +33,9 @@ bool RF24::startWrite(byte *, int) { return true; };
 
 bool RF24::read(byte *, int) { return false; };
     
+void RF24::setDataRate(int) { };
+void RF24::setPALevel(int) { };
+
 void SerialClass::begin(int, int) {}
 bool SerialClass::available() { return false; }
 
@@ -52,6 +55,7 @@ void pinMode(int, int) {
 
 void digitalWrite(int, bool) {
 }
+void delay(int) {}
 
 int analogRead(int) {
 	return 0;

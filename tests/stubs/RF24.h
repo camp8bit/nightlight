@@ -22,6 +22,9 @@ class RF24 {
     void enableDynamicPayloads();
     void setAutoAck (bool enable);   
     void setAutoAck (uint8_t pipe, bool enable);   
+    void setDataRate(int);
+    void setPALevel(int);
+
     uint8_t getDynamicPayloadSize();
     bool write(byte *, int);
     bool startWrite(byte *, int);
@@ -50,6 +53,7 @@ void pinMode(int, int);
 
 void digitalWrite(int, bool);
 int analogRead(int);
+void delay(int);
 
 void randomSeed(int);
 int random(int);
@@ -58,6 +62,9 @@ int millis();
 
 const int OUTPUT = 1;
 const int SERIAL_8N1 = 0;
+
+const int RF24_2MBPS = 1;
+const int RF24_PA_HIGH = 1;
 
 #endif
 

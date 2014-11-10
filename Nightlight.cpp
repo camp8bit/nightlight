@@ -1,4 +1,5 @@
 #include <RF24.h>
+#include <string.h>
 #include "Nightlight.h"
 
 Nightlight::Nightlight(uint64_t broadcast) : _radio(9,10)
@@ -145,7 +146,7 @@ void NightlightState::receiveMessage(Nightlight *me, byte sender, byte type, byt
 void NightlightState::receiveSerial(Nightlight *me, char *line) {
   // Look up a built-in command
   NightlightState *dest = (NightlightState *)_serialCommands.get(line);
-  if((int)dest != 0) {
+  if((long)dest != 0) {
     Serial.println("Switching state");
     me->setState(dest);
 
