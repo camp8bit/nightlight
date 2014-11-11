@@ -113,24 +113,6 @@ class NightlightStateWithFriend : public NightlightState {
 };
 
 /**
- * Represents an output/display device that it just "on" or "off".
- * Can be strobed, etc, by the caller
- */
-class DigitalOutput {
-    public:
-        DigitalOutput(byte pin);
-        DigitalOutput(byte pin, bool inverted);
-
-        void setup();
-        void on();
-        void off();
-
-    protected:
-        byte _pin;
-        bool _inverted;
-};
-
-/**
  * An open node, waiting for a controller
  */
 class OpenNode : public NightlightState { 
@@ -155,13 +137,13 @@ class ControlledNode : public NightlightStateWithFriend {
     void onFinished(Nightlight *me);
     bool receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
     
-    void setOutput(DigitalOutput *output);
+    void setCommand(NightlightState *command);
     void setState_lostControl(NightlightState *dest);
     
   private:
     uint64_t _controller;
     NightlightState *_state_lostControl;
-    DigitalOutput *_output;
+    NightlightState *_command;
 };
 
 /**
@@ -175,6 +157,18 @@ class ControllerState : public NightlightState {
 
   private:
     byte _controlling;
+};
+
+/**
+ * A blinking light
+ */
+class BlinkyLight : public NightlightState {
+  void start(Nightlight *me);
+  void onTimeout(Nightlight *me);
+
+  private:
+    bool _on;
+    unsigned long _die;
 };
 
 /////////

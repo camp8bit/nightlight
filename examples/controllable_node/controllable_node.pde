@@ -27,11 +27,13 @@ OpenNode openNode;
 ControlledNode controlledNode;
 ControllerState controllerState;
 
-// Output device - an LED on pin #2
-DigitalOutput led(2);
+// This state is basically a command
+BlinkyLight blinky;
+
 
 void setup(void)
 {
+   Serial.begin(57600, SERIAL_8N1);
   
   // Wire together the states (dependency injection in Arduino, oh my)
   openNode.setState_controlled(&controlledNode);
@@ -40,16 +42,18 @@ void setup(void)
   // Swapping between states triggered from commands on the serial input
   openNode.onSerialCommandGoto("controller", &controllerState);
   controllerState.onSerialCommandGoto("node", &openNode);
-  
-  // Connect the LED to the output
-  led.setup();
-  controlledNode.setOutput(&led);
 
-  // Starting state
-  nightlight.setState(&openNode);
+  openNode.onSerialCommandGoto("B", &blinky);
+
+  // Connect the LED to the output 
+  controlledNode.setCommand(&blinky);
 
   nightlight.setup();
+
   nightlight.enableSerial();
+
+  // Starting state
+  nightlight.pushState(&openNode);
 }
 
 void loop()

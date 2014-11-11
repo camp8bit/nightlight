@@ -251,28 +251,6 @@ void NightlightState::onSerialCommandGoto(char *command, NightlightState *dest) 
 
 ///////////////////////////////////////////////////////
 
-DigitalOutput::DigitalOutput(byte pin) {
-  _pin = pin;
-  _inverted = false;
-}
-DigitalOutput::DigitalOutput(byte pin, bool inverted) {
-  _pin = pin;
-  _inverted = inverted;
-}
-
-void DigitalOutput::setup() {
-  pinMode(_pin, OUTPUT);
-}
-void DigitalOutput::on() {
-  digitalWrite(_pin, !_inverted);
-}
-void DigitalOutput::off() {
-  digitalWrite(_pin, _inverted);
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-
 void OpenNode::setState_controlled(NightlightStateWithFriend *dest) {
   _state_controlled = dest;
 }
@@ -299,8 +277,8 @@ bool OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-void ControlledNode::setOutput(DigitalOutput *output) {
-  _output = output;
+void ControlledNode::setCommand(NightlightState *command) {
+  _command = command;
 }
 void ControlledNode::setState_lostControl(NightlightState *dest) {
   _state_lostControl = dest;
@@ -308,8 +286,7 @@ void ControlledNode::setState_lostControl(NightlightState *dest) {
 void ControlledNode::start(Nightlight *me) {
   me->sendMessage(_friendAddress, MSG_CONTROL_START, 0, 0);
 }
-void ControlledNode::onTimeout(Nightlight *me) {
-  _output->off();
+void ControlledNode::onFinished(Nightlight *me) {
   me->sendMessage(_friendAddress, MSG_COMMAND_END, 0, 0);
 }
 
@@ -318,8 +295,8 @@ bool ControlledNode::receiveMessage(Nightlight *me, byte sender, byte type, byte
   if(type == MSG_COMMAND_SEND) {
     if(sender == _friendAddress) {
       me->sendMessage(_friendAddress, MSG_COMMAND_START, 0, 0);
-      _output->on();
-      me->setTimeout(1000);
+      me->pushState(_command);
+      _command->notifyFinished(this);
       return true;
     }
   }
@@ -412,6 +389,29 @@ void outputBytes(byte *data, byte len) {
 
 }
 
+////////////////////////////////////////////////////////////////////////////////////
+
+void BlinkyLight::start(Nightlight *me) {
+  pinMode(2, OUTPUT);
+
+  _on = true;
+  _die = millis() + 2000;
+
+  this->onTimeout(me);
+}
+
+void BlinkyLight::onTimeout(Nightlight *me) {
+  digitalWrite(2, _on);
+  _on = !_on;
+
+  if(millis() > _die) {
+    digitalWrite(2, false);
+    this->finish(me);
+
+  } else { 
+   this->setTimeout(100);
+  }
+}
 ////////////////////////////////////////////////////////////////////////////////////
 
 Map::Map() {
