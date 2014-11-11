@@ -5,6 +5,7 @@
 Nightlight::Nightlight(uint64_t broadcast) : _radio(9,10)
 {
   _broadcast = broadcast;
+  _numStates = 0;
 }
 
 void Nightlight::setup()
@@ -31,12 +32,6 @@ void Nightlight::setup()
   _radio.setAutoAck(0, false);
 
   _radio.startListening();
-
-  //
-  // Dump the configuration of the rf unit for debugging
-  //
-
-  //  radio.printDetails();  
 }
 
 void Nightlight::enableSerial() {
@@ -51,7 +46,6 @@ void Nightlight::enableSerial() {
 
 void Nightlight::loop()
 {
-
   // Check for radio messages
   if ( _radio.available() ) {
     _handleRadioInput();
@@ -59,30 +53,57 @@ void Nightlight::loop()
 
   // Check for serial messages
   if ( Serial.available() ) {
-    char c[80];
-    byte numChars;
-    numChars = Serial.readBytesUntil('\n', c, 80);
-    c[numChars] = 0;
-    _state->receiveSerial(this, c);
+    _handleSerialInput();
   }
   
-  // Check for timeout
-  if(_timeout && _timeout <= millis()) {
-    _timeout = 0;
-    _state->onTimeout(this);
+  // Check for timeouts
+  int i;
+  unsigned long m = millis();
+  for(i=0; i<_numStates; i++) {
+    if(_states[i]->_timeout && _states[i]->_timeout < m) {
+      _states[i]->_timeout = 0;
+      _states[i]->onTimeout(this);
+    }
   }
 }
 
 void Nightlight::_handleRadioInput() {
-  bool done = false;
   byte message[32];
 
   // Fetch the payload, and see if this was the last one.
   byte messageSize = _radio.getDynamicPayloadSize();
 
-  done = _radio.read(message, 32);
-  _state->receiveMessage(this, message[1], message[0], message+2, messageSize-2);
+  _radio.read(message, 32);
 
+  // Debug message receive
+  output("message received from #");
+  Serial.print(message[1]);
+  output(": type ");
+  Serial.print(message[0]);
+  output("; data: ");
+  outputBytes(message+2, messageSize-2);
+  Serial.write('\n');
+
+  // Bubble message through states until one receives the inout
+  int i;
+  for(i=_numStates-1;i>=0;i--) {
+    if(_states[i]->receiveMessage(this, message[1], message[0], message+2, messageSize-2)) break;
+  }
+}
+
+void Nightlight::_handleSerialInput() {
+  char c[80];
+  byte numChars;
+
+  // Collect a line from the serial device (of up to 80 char)
+  numChars = Serial.readBytesUntil('\n', c, 80);
+  c[numChars] = 0;
+
+  // Bubble message through states until one receives the input
+  int i;
+  for(i=_numStates-1;i>=0;i--) {
+    if(_states[i]->receiveSerial(this, c)) break;
+  }
 }
 
 
@@ -96,6 +117,7 @@ void Nightlight::sendMessage(byte address, byte type, byte *data, byte dataLengt
 
   byte packet[32];
 
+  // Debug message about sending
   output("Sending message to ");
   Serial.print(address);
   output(". My address: ");
@@ -120,41 +142,104 @@ void Nightlight::sendMessage(byte address, byte type, byte *data, byte dataLengt
   _radio.write(packet, dataLength + 2 );
 
   _radio.startListening();
+
+  /*
+  digitalWrite(2, true);
+  delay(100);
+  digitalWrite(2, false);
+  */
 }
 
-void Nightlight::setTimeout(unsigned long timeout)
+/**
+ * Switch from one state to another
+ */
+void Nightlight::changeState(NightlightState *from, NightlightState *to)
+{
+  this->removeState(from);
+  this->pushState(to);
+}
+
+/**
+ * Remove a state from the stack (needn't be at the top of the stack)
+ */
+void Nightlight::removeState(NightlightState *state)
+{
+  int i;
+  // Find the place to remove an item
+  for(i=0; i<_numStates; i++) {
+    if(_states[i] == state) break;
+  }
+  // Shift all other items back 1
+  for(; i<_numStates-1;i++) {
+    _states[i] = _states[i+1];
+  }
+  _numStates--;
+}
+
+/**
+ * Push a new state onto the stack
+ */
+void Nightlight::pushState(NightlightState *state)
+{
+  // Add the item to the stack
+  _states[_numStates] = state;
+  _numStates++;
+
+  state->_timeout = 0;
+  state->start(this);
+}
+
+///////////////////////////////////////////////////////
+
+void NightlightState::setTimeout(unsigned long timeout)
 {
   _timeout = millis() + timeout;
 }
 
-void Nightlight::setState(NightlightState *state)
+void NightlightState::finish(Nightlight *me)
 {
-  _timeout = 0;
-  _state = state;
-  _state->start(this);
+  me->removeState(this);
+
+  // If another state is watching for the end of this one, notify
+  if((long)_notifyFinished > 0) {
+    _notifyFinished->onFinished(me);
+  }
 }
 
-///////////////////////////////////////////////////////
+/**
+ * Attach another state to be notifed of the finish of this one.
+ * state->onFinished(nightlight) will be called.
+ */
+void NightlightState::notifyFinished(NightlightState *notify) {
+  _notifyFinished = notify;
+}
 
 void NightlightState::start(Nightlight *me) {
 }
 void NightlightState::onTimeout(Nightlight *me) {
 }
-void NightlightState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength) {
+void NightlightState::onFinished(Nightlight *me) {
 }
 
-void NightlightState::receiveSerial(Nightlight *me, char *line) {
+bool NightlightState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength) {
+  return false;
+}
+
+bool NightlightState::receiveSerial(Nightlight *me, char *line) {
   // Look up a built-in command
   NightlightState *dest = (NightlightState *)_serialCommands.get(line);
   if((long)dest != 0) {
     Serial.println("Switching state");
-    me->setState(dest);
+    me->pushState(dest);
+    return true;
 
   } else {
     Serial.print("Unknown command '");
     Serial.print(line);
     Serial.println("'");
   }
+
+  return false;
 }
 
 /**
@@ -198,23 +283,18 @@ void OpenNode::start(Nightlight *me) {
 
 void OpenNode::onTimeout(Nightlight *me) {
   me->sendMessage(0, MSG_HELLO, (byte *)"OpenNode", 8);
-  me->setTimeout(2000);
+  this->setTimeout(2000);
 }
   
-void OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
+bool OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_CONTROL_REQUEST) {
     _state_controlled->setFriend(sender);
-    me->setState(_state_controlled);
+    me->pushState(_state_controlled);
+    return true;
   }
 
-  output("message received from #");
-  Serial.print(sender);
-  output(": type ");
-  Serial.print(type);
-  output("; data: ");
-  outputBytes(data, dataLength);
-  Serial.write('\n');
+  return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -233,15 +313,21 @@ void ControlledNode::onTimeout(Nightlight *me) {
   me->sendMessage(_friendAddress, MSG_COMMAND_END, 0, 0);
 }
 
-void ControlledNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
+bool ControlledNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_COMMAND_SEND) {
     if(sender == _friendAddress) {
       me->sendMessage(_friendAddress, MSG_COMMAND_START, 0, 0);
       _output->on();
       me->setTimeout(1000);
+      return true;
     }
-  }    
+  }
+
+  // Prevent the event from bubbling
+  if(type == MSG_CONTROL_REQUEST) return true;
+
+  return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -250,7 +336,7 @@ void ControllerState::start(Nightlight *me) {
   _controlling = 0;
 }
 
-void ControllerState::receiveSerial(Nightlight *me, char *line)
+bool ControllerState::receiveSerial(Nightlight *me, char *line)
 {
   if(line[0] == 'B') {
     if(_controlling > 0) {
@@ -262,15 +348,19 @@ void ControllerState::receiveSerial(Nightlight *me, char *line)
     } else {
       Serial.println("No nodes currently under control");
     }
-  } 
+    return true;
+  }
+
+  return false;
 }
 
-void ControllerState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
+bool ControllerState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_HELLO) {
     Serial.print("Received MSG_HELLO from ");
     Serial.println(sender);
     me->sendMessage(sender, MSG_CONTROL_REQUEST, 0, 0);
+    return true;
   }    
 
   if(type == MSG_CONTROL_START) {
@@ -287,6 +377,8 @@ void ControllerState::receiveMessage(Nightlight *me, byte sender, byte type, byt
     Serial.print("Received MSG_COMMAND_END from ");
     Serial.println(sender);
   }
+
+  return false;
 }
 
 

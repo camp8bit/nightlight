@@ -31,6 +31,8 @@ class Map;
 
 const byte MAP_MAX_ITEMS = 5;
 
+const byte STATE_STACK_SIZE = 5;
+
 /**
  * Represents a simple map with 5 elements; mapping keys to (void *) values
  */
@@ -52,18 +54,21 @@ class Nightlight {
     void setup();
     void loop();
     void sendMessage(byte address, byte type, byte *data, byte dataLength);
-    void setState(NightlightState *state);
-    void setTimeout(unsigned long millis);
     void enableSerial();
+
+    void pushState(NightlightState *state);
+    void changeState(NightlightState *from, NightlightState *to);
+    void removeState(NightlightState *state);
     
   private:
     uint64_t _broadcast; // The broadcast address, last 2 bytes must be 00
     byte _myAddressOffset; // The offset, 0-255, of the personal address
     RF24 _radio;
-    NightlightState *_state;
-    unsigned long _timeout;
+    NightlightState *_states[STATE_STACK_SIZE];
+    byte _numStates;
 
     void _handleRadioInput();
+    void _handleSerialInput();
 };
 
 /**
@@ -72,14 +77,24 @@ class Nightlight {
 class NightlightState {
   public:
     virtual void start(Nightlight *me);
-    virtual void onTimeout(Nightlight *me);
-    virtual void receiveMessage(Nightlight *me, byte address, byte type, byte *data, byte dataLength);
-    virtual void receiveSerial(Nightlight *me, char *line);
+    void finish(Nightlight *me);
 
+    // Event handlers
+    virtual void onTimeout(Nightlight *me);
+    virtual void onFinished(Nightlight *me);
+    virtual bool receiveMessage(Nightlight *me, byte address, byte type, byte *data, byte dataLength);
+    virtual bool receiveSerial(Nightlight *me, char *line);
+
+    // Configuration
     void onSerialCommandGoto(char *command, NightlightState *dest);
+    void setTimeout(unsigned long millis);
+    void notifyFinished(NightlightState *notify);
+
+    unsigned long _timeout;
 
   private:
     Map _serialCommands;
+    NightlightState *_notifyFinished;
 };
 
 
@@ -122,7 +137,7 @@ class OpenNode : public NightlightState {
   public:
     void start(Nightlight *me);
     void onTimeout(Nightlight *me);
-    void receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
+    bool receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
 
     void setState_controlled(NightlightStateWithFriend *dest);
 
@@ -137,8 +152,8 @@ class OpenNode : public NightlightState {
 class ControlledNode : public NightlightStateWithFriend { 
   public:
     void start(Nightlight *me);
-    void onTimeout(Nightlight *me);
-    void receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
+    void onFinished(Nightlight *me);
+    bool receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
     
     void setOutput(DigitalOutput *output);
     void setState_lostControl(NightlightState *dest);
@@ -155,8 +170,8 @@ class ControlledNode : public NightlightStateWithFriend {
 class ControllerState : public NightlightState { 
   public:
     void start(Nightlight *me);
-    void receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
-    void receiveSerial(Nightlight *me, char *line);
+    bool receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength);
+    bool receiveSerial(Nightlight *me, char *line);
 
   private:
     byte _controlling;
