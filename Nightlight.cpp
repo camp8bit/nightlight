@@ -13,7 +13,7 @@ void Nightlight::setup()
   
   randomSeed(analogRead(3));
   _myAddressOffset = random(256);
-  Serial.print("My address is ");
+  Serial.print("\n00 My address is ");
   Serial.println(_myAddressOffset);
 
   _radio.begin();
@@ -36,8 +36,8 @@ void Nightlight::setup()
 
 void Nightlight::enableSerial() {
   Serial.begin(57600, SERIAL_8N1);
-  outputln("\nNightlight - serial communication activated");
-  output("Listening on ");
+  outputln("00 Nightlight - serial communication activated");
+  output("00 Listening on ");
   Serial.print((long unsigned int)_broadcast);
   output("-");
   Serial.println(_myAddressOffset);
@@ -76,7 +76,7 @@ void Nightlight::_handleRadioInput() {
   _radio.read(message, 32);
 
   // Debug message receive
-  output("message received from #");
+  output("00 message received from #");
   Serial.print(message[1]);
   output(": type ");
   Serial.print(message[0]);
@@ -99,10 +99,12 @@ void Nightlight::_handleSerialInput() {
   numChars = Serial.readBytesUntil('\n', c, 80);
   c[numChars] = 0;
 
+  byte type = hexPair(c);
+
   // Bubble message through states until one receives the input
   int i;
   for(i=_numStates-1;i>=0;i--) {
-    if(_states[i]->receiveSerial(this, c)) break;
+    if(_states[i]->receiveMessage(this, -1, type, (byte *)c+3, numChars-3)) break;
   }
 }
 
@@ -110,15 +112,20 @@ void Nightlight::_handleSerialInput() {
 
 /**
  * Send a message to an address
- * @param address 0 for broadcast, 1-255 for a specific recipient
+ * 
+ * Messages can be sent to this node's address, and will be processed internally
+ * rather than sent over radio.
+ *
+ * @param address 0 for broadcast, 1-255 for a specific recipient, -1 for serial
  */
-void Nightlight::sendMessage(byte address, byte type, byte *data, byte dataLength)
+void Nightlight::sendMessage(int address, byte type, byte *data, byte dataLength)
 {
 
+  int i;
   byte packet[32];
 
   // Debug message about sending
-  output("Sending message to ");
+  output("00 Sending message to ");
   Serial.print(address);
   output(". My address: ");
   Serial.print(_myAddressOffset);
@@ -128,26 +135,39 @@ void Nightlight::sendMessage(byte address, byte type, byte *data, byte dataLengt
   outputBytes(data, dataLength);
   Serial.write('\n');
 
-  _radio.stopListening();
-  _radio.openWritingPipe(_broadcast + address);
-
-  // Build packet
-  packet[0] = type;
-  packet[1] = _myAddressOffset;
-  for(int i=0;i<dataLength;i++) {
-    packet[i+2] = data[i];
+  // Internal message to send back to other states
+  if(address == _myAddressOffset) {
+    // Bubble message through states until one receives the inout
+    for(i=_numStates-1;i>=0;i--) {
+      if(_states[i]->receiveMessage(this, _myAddressOffset, type, data, dataLength)) break;
+    }
   }
 
-  // Non-blocking, no error checking
-  _radio.write(packet, dataLength + 2 );
+  // Serial message
+  else if(address == -1) {
+    Serial.print(type, HEX);
+    Serial.print(' ');
+    Serial.println((char *)data);
 
-  _radio.startListening();
+  }
 
-  /*
-  digitalWrite(2, true);
-  delay(100);
-  digitalWrite(2, false);
-  */
+  // Radio message
+  else {
+    _radio.stopListening();
+    _radio.openWritingPipe(_broadcast + address);
+
+    // Build packet
+    packet[0] = type;
+    packet[1] = _myAddressOffset;
+    for(int i=0;i<dataLength;i++) {
+      packet[i+2] = data[i];
+    }
+
+    // Non-blocking, no error checking
+    _radio.write(packet, dataLength + 2 );
+
+    _radio.startListening();
+  }
 }
 
 /**
@@ -216,27 +236,26 @@ void NightlightState::notifyFinished(NightlightState *notify) {
 
 void NightlightState::start(Nightlight *me) {
 }
+
 void NightlightState::onTimeout(Nightlight *me) {
 }
 void NightlightState::onFinished(Nightlight *me) {
 }
 
-bool NightlightState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength) {
-  return false;
-}
+bool NightlightState::receiveMessage(Nightlight *me, int sender, byte type, byte *data, byte dataLength) {
+  if(type == MSG_CHANGE_MODE && sender == -1) {
+    // Look up a built-in command
+    NightlightState *dest = (NightlightState *)_serialCommands.get((char *)data);
+    if((long)dest != 0) {
+      Serial.println("00 Switching state");
+      me->pushState(dest);
+      return true;
 
-bool NightlightState::receiveSerial(Nightlight *me, char *line) {
-  // Look up a built-in command
-  NightlightState *dest = (NightlightState *)_serialCommands.get(line);
-  if((long)dest != 0) {
-    Serial.println("Switching state");
-    me->pushState(dest);
-    return true;
-
-  } else {
-    Serial.print("Unknown command '");
-    Serial.print(line);
-    Serial.println("'");
+    } else {
+      Serial.print("00 Unknown mode '");
+      Serial.print((char *)data);
+      Serial.println("'");
+    }
   }
 
   return false;
@@ -264,7 +283,7 @@ void OpenNode::onTimeout(Nightlight *me) {
   this->setTimeout(2000);
 }
   
-bool OpenNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
+bool OpenNode::receiveMessage(Nightlight *me, int sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_CONTROL_REQUEST) {
     _state_controlled->setFriend(sender);
@@ -290,7 +309,7 @@ void ControlledNode::onFinished(Nightlight *me) {
   me->sendMessage(_friendAddress, MSG_COMMAND_END, 0, 0);
 }
 
-bool ControlledNode::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
+bool ControlledNode::receiveMessage(Nightlight *me, int sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_COMMAND_SEND) {
     if(sender == _friendAddress) {
@@ -323,7 +342,7 @@ bool ControllerState::receiveSerial(Nightlight *me, char *line)
       me->sendMessage(_controlling, MSG_COMMAND_SEND, 0, 0);
       
     } else {
-      Serial.println("No nodes currently under control");
+      Serial.println("00 No nodes currently under control");
     }
     return true;
   }
@@ -334,24 +353,24 @@ bool ControllerState::receiveSerial(Nightlight *me, char *line)
 bool ControllerState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
 {
   if(type == MSG_HELLO) {
-    Serial.print("Received MSG_HELLO from ");
+    Serial.print("00 Received MSG_HELLO from ");
     Serial.println(sender);
     me->sendMessage(sender, MSG_CONTROL_REQUEST, 0, 0);
     return true;
   }    
 
   if(type == MSG_CONTROL_START) {
-    Serial.print("Received MSG_CONTROL_START from ");
+    Serial.print("00 Received MSG_CONTROL_START from ");
     Serial.println(sender);
     _controlling = sender;
   }
 
   if(type == MSG_COMMAND_START) {
-    Serial.print("Received MSG_COMMAND_START from ");
+    Serial.print("00 Received MSG_COMMAND_START from ");
     Serial.println(sender);
   }
   if(type == MSG_COMMAND_END) {
-    Serial.print("Received MSG_COMMAND_END from ");
+    Serial.print("00 Received MSG_COMMAND_END from ");
     Serial.println(sender);
   }
 
@@ -446,4 +465,19 @@ void *Map::get(char *key) {
 
   // No match
   return (void *)0;
+}
+
+/**
+ * Convert a 2-hex-character ascii-encoded value into a byte, 0-255
+ */
+byte hexPair(char *ascii) {
+  return hexChar(ascii[0]) * 16 + ascii[1];
+}
+
+/**
+ * Convert a hex-character ascii-encoded value into a byte, 0-15
+ */
+byte hexChar(char ascii) {
+  ascii = toupper(ascii);
+  return (ascii >= 'A') ? ascii - 'A' + 10 : ascii - '0';
 }
