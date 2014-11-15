@@ -291,6 +291,8 @@ bool OpenNode::receiveMessage(Nightlight *me, int sender, byte type, byte *data,
     return true;
   }
 
+  NightlightState::receiveMessage(me, sender, type, data, dataLength);
+
   return false;
 }
 
@@ -332,11 +334,11 @@ void ControllerState::start(Nightlight *me) {
   _numControlling = 0;
 }
 
-bool ControllerState::receiveSerial(Nightlight *me, char *line)
+bool ControllerState::receiveMessage(Nightlight *me, int sender, byte type, byte *data, byte dataLength)
 {
-  if(line[0] == 'B') {
   int i;
 
+  if(type == MSG_COMMAND_SEND && sender == -1) {
     if(_numControlling > 0) {
       for(i=0; i<_numControlling; i++) {
         Serial.print("00 Sending a beat to ");
@@ -350,11 +352,6 @@ bool ControllerState::receiveSerial(Nightlight *me, char *line)
     return true;
   }
 
-  return false;
-}
-
-bool ControllerState::receiveMessage(Nightlight *me, byte sender, byte type, byte *data, byte dataLength)
-{
   if(type == MSG_HELLO) {
     Serial.print("00 Received MSG_HELLO from ");
     Serial.println(sender);
@@ -414,7 +411,8 @@ void outputBytes(byte *data, byte len) {
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-void BlinkyLight::start(Nightlight *me) {
+void BlinkyLight::start(Nightlight *me)
+{
   pinMode(2, OUTPUT);
 
   _on = true;
@@ -423,7 +421,8 @@ void BlinkyLight::start(Nightlight *me) {
   this->onTimeout(me);
 }
 
-void BlinkyLight::onTimeout(Nightlight *me) {
+void BlinkyLight::onTimeout(Nightlight *me)
+{
   digitalWrite(2, _on);
   _on = !_on;
 
@@ -475,7 +474,7 @@ void *Map::get(char *key) {
  * Convert a 2-hex-character ascii-encoded value into a byte, 0-255
  */
 byte hexPair(char *ascii) {
-  return hexChar(ascii[0]) * 16 + ascii[1];
+  return hexChar(ascii[0]) * 16 + hexChar(ascii[1]);
 }
 
 /**
