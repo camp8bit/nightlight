@@ -1,3 +1,5 @@
+//#define DEBUG_MESSAGES
+
 typedef unsigned char byte;
 typedef unsigned long long uint64_t;
 
@@ -208,13 +210,22 @@ class FriendList : public NightlightState {
 
 /////////
 
-void output(const char* asd);
-void output(long unsigned int asd);
-void outputln(const char* asd);
-void outputln(long unsigned int asd);
 void outputBytes(byte *data, byte len);
 #endif
 
 
 byte hexPair(char *ascii);
 byte hexChar(char ascii);
+
+/////////
+
+/**
+ * Message debugging stub
+ */
+#ifdef DEBUG_MESSAGES
+void sendDebugMessage(char *prefix, int address, byte myAddress, byte type, byte dataLength, byte *data);
+
+#define SEND_DEBUG_MESSAGE(a,b,c,d,e,f) ( { sendDebugMessage(a,b,c,d,e,f); } )
+#else
+#define SEND_DEBUG_MESSAGE(a,b,c,d,e,f)
+#endif

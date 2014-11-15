@@ -36,10 +36,10 @@ void Nightlight::setup()
 
 void Nightlight::enableSerial() {
   Serial.begin(57600, SERIAL_8N1);
-  outputln("00 Nightlight - serial communication activated");
-  output("00 Listening on ");
+  Serial.println("00 Nightlight - serial communication activated");
+  Serial.print("00 Listening on ");
   Serial.print((long unsigned int)_broadcast);
-  output("-");
+  Serial.print("-");
   Serial.println(_myAddressOffset);
 }
 
@@ -76,13 +76,7 @@ void Nightlight::_handleRadioInput() {
   _radio.read(message, 32);
 
   // Debug message receive
-  output("00 message received from #");
-  Serial.print(message[1]);
-  output(": type ");
-  Serial.print(message[0]);
-  output("; data: ");
-  outputBytes(message+2, messageSize-2);
-  Serial.write('\n');
+  SEND_DEBUG_MESSAGE("Message received from ", message[1], _myAddressOffset, message[0], messageSize-2, message+2);
 
   // Bubble message through states until one receives the inout
   int i;
@@ -100,6 +94,9 @@ void Nightlight::_handleSerialInput() {
   c[numChars] = 0;
 
   byte type = hexPair(c);
+
+  // Debug message receive
+  SEND_DEBUG_MESSAGE("Message received from ", -1, _myAddressOffset, type, numChars, (byte *)c);
 
   // Bubble message through states until one receives the input
   int i;
@@ -124,16 +121,7 @@ void Nightlight::sendMessage(int address, byte type, byte *data, byte dataLength
   int i;
   byte packet[32];
 
-  // Debug message about sending
-  output("00 Sending message to ");
-  Serial.print(address);
-  output(". My address: ");
-  Serial.print(_myAddressOffset);
-  output("Type: ");
-  Serial.print(type);
-  output(", data: ");
-  outputBytes(data, dataLength);
-  Serial.write('\n');
+  SEND_DEBUG_MESSAGE("Sending message to ", address, _myAddressOffset, type, dataLength, data);
 
   // Internal message to send back to other states
   if(address == _myAddressOffset) {
@@ -353,46 +341,16 @@ bool ControllerState::receiveMessage(Nightlight *me, int sender, byte type, byte
   }
 
   if(type == MSG_HELLO) {
-    Serial.print("00 Received MSG_HELLO from ");
-    Serial.println(sender);
     me->sendMessage(sender, MSG_CONTROL_REQUEST, 0, 0);
     return true;
   }    
 
   if(type == MSG_CONTROL_START) {
-    Serial.print("00 Received MSG_CONTROL_START from ");
-    Serial.println(sender);
     _controlling[_numControlling] = sender;
     _numControlling++;
   }
 
-  if(type == MSG_COMMAND_START) {
-    Serial.print("00 Received MSG_COMMAND_START from ");
-    Serial.println(sender);
-  }
-  if(type == MSG_COMMAND_END) {
-    Serial.print("00 Received MSG_COMMAND_END from ");
-    Serial.println(sender);
-  }
-
   return false;
-}
-
-
-void output(const char* asd) {
-    /*if (DEBUG)*/ Serial.write(asd);    
-}
-
-void output(long unsigned int asd) {
-    /*if (DEBUG)*/ Serial.write(asd);
-}
-
-void outputln(const char* asd) {
-    /*if (DEBUG)*/ Serial.println(asd);
-}
-
-void outputln(long unsigned int asd) {
-    /*if (DEBUG)*/ Serial.write(asd);
 }
 
 void outputBytes(byte *data, byte len) {
@@ -545,3 +503,19 @@ byte hexChar(char ascii) {
   ascii = toupper(ascii);
   return (ascii >= 'A') ? ascii - 'A' + 10 : ascii - '0';
 }
+
+#ifdef DEBUG_MESSAGES
+void sendDebugMessage(char *prefix, int address, byte myAddress, byte type, byte dataLength, byte *data) {
+  // Debug message about sending
+  Serial.print("00 ");
+  Serial.print(prefix);
+  Serial.print(address);
+  Serial.print(". My address: ");
+  Serial.print(myAddress);
+  Serial.print("; type: ");
+  Serial.print(type);
+  Serial.print("; data: ");
+  outputBytes(data, dataLength);
+  Serial.write("\n");
+}
+#endif
