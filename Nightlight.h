@@ -6,6 +6,7 @@ typedef unsigned long long uint64_t;
 #ifndef Nightlight_h
 #define Nightlight_h
 
+const byte CONTROLLER_MAX_NODES = 8;  // Maximum number of nodes that can be controlled
 // Message types
 
 // Presence notification
@@ -156,7 +157,9 @@ class ControllerState : public NightlightState {
     bool receiveSerial(Nightlight *me, char *line);
 
   private:
-    byte _controlling;
+    byte _numControlling;
+    byte _controlling[CONTROLLER_MAX_NODES];
+    byte _visible[CONTROLLER_MAX_NODES];
 };
 
 /**
