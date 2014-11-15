@@ -434,6 +434,67 @@ void BlinkyLight::onTimeout(Nightlight *me)
    this->setTimeout(100);
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Kick off the timeout
+ */
+void FriendList::start(Nightlight *me)
+{
+  _numFriends = 0;
+  this->setTimeout(1000);
+}
+
+bool FriendList::receiveMessage(Nightlight *me, int sender, byte type, byte *data, byte dataLength)
+{
+  int i;
+  if(type == MSG_HELLO) {
+    for(i=0; i<_numFriends; i++) {
+      // Match, push out time
+      if(_friends[i] == sender) {
+        _timeout[i] = millis() + 5000;
+        return true;
+      }
+    }
+
+    // No match, add to list, send appear message
+    _friends[_numFriends] = sender;
+    _timeout[_numFriends] = millis() + 5000;
+    _numFriends++;
+
+    me->sendMessage(me->_myAddressOffset, MSG_APPEAR, (byte *)&sender, 1);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Cleanup disappeared notes every second
+ */
+void FriendList::onTimeout(Nightlight *me)
+{
+  int i, j;
+  unsigned long m = millis();
+  for(i=0; i<_numFriends; i++) {
+    // Timeout reached, send a disappear mesasge
+    if(_timeout[i] < m) {
+      me->sendMessage(me->_myAddressOffset, MSG_DISAPPEAR, _friends+i, 1);
+
+      // Remove element from array
+      for(j=i; j<_numFriends-1; j++) {
+        _friends[i] = _friends[i+1];
+        _timeout[i] = _timeout[i+1];
+      }
+      i--;
+      _numFriends--;
+    }
+  }
+
+  this->setTimeout(1000);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////
 
 Map::Map() {

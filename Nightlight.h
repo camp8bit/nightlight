@@ -37,6 +37,7 @@ const byte MSG_EVENT = 0x18;
 // Operational control (from serial)
 const byte MSG_CHANGE_MODE = 0x20;
 
+const byte FRIENDLIST_MAX_NODES = 16;
 
 class Nightlight;
 class NightlightState;
@@ -187,6 +188,23 @@ class BlinkyLight : public NightlightState {
     bool _on;
     unsigned long _die;
 };
+
+
+/**
+ * An agent that keeps state of who is here, sending MSG_APPEAR and MSG_DISAPPEAR messages.
+ */
+class FriendList : public NightlightState { 
+  public:
+    void start(Nightlight *me);
+    void onTimeout(Nightlight *me);
+    bool receiveMessage(Nightlight *me, int sender, byte type, byte *data, byte dataLength);
+
+  private:
+    byte _numFriends;
+    byte _friends[FRIENDLIST_MAX_NODES];
+    unsigned long _timeout[FRIENDLIST_MAX_NODES];
+};
+
 
 /////////
 

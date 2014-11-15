@@ -15,7 +15,7 @@
 #include <serial>
 
 bool DEBUG = true;
-
+  
 ////////////////////////////////////////////////////////////////////////////////////
 
 // The broadcast address defines the address space
@@ -30,6 +30,7 @@ ControllerState controllerState;
 // This state is basically a command
 BlinkyLight blinky;
 
+FriendList friendList;
 
 void setup(void)
 {
@@ -53,6 +54,7 @@ void setup(void)
   nightlight.enableSerial();
 
   // Starting state
+  nightlight.pushState(&friendList);
   nightlight.pushState(&openNode);
 }
 
